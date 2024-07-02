@@ -5,6 +5,11 @@ from scipy.sparse.linalg import lsmr
 from scipy.sparse import vstack
 
 
+@dataclass
+class Config:
+    verbose: bool = False
+
+
 def solve(
     A,
     b,
@@ -33,7 +38,7 @@ def solve(
     x0_ADMM = np.zeros(Q.shape[0])
     # scale the Q matrix by the admm f
     Q *= rho_ADMM
-    for i in range(nmajor):
+    for _i in range(nmajor):
         # current model value
         Mx = vstack([A, Q]) @ model  # np.dot(A, model)
 
@@ -46,23 +51,24 @@ def solve(
         cost_data1 = np.linalg.norm(b[:A_size])
         cost_data2 = np.linalg.norm(b0[A_size:])
         model_norm = np.linalg.norm(model)
-        cost_data = -1.0
-        cost_data_model = 0.0
-        if cost_data2 > 0:
-            cost_data = cost_data1 / cost_data2
-        if model_norm > 0:
-            cost_data_model = cost_data1 / model_norm
-        cost_admm1 = np.linalg.norm(qx_val - admm_method.z)
-        cost_admm2 = np.linalg.norm(admm_method.z)
-        cost_admm = -1.0
-        if cost_admm2 > 0:
-            cost_admm = cost_admm1 / cost_admm2
-        # print("----------------------------------------")
-        # print(f"it = {i}")
-        # print("cost_data = ", cost_data)
-        # print("cost_data_model = ", cost_data_model)
-        # print("cost_admm = ", cost_admm)
-        # print("----------------------------------------")
+        if Config.verbose:
+            cost_data = -1.0
+            cost_data_model = 0.0
+            if cost_data2 > 0:
+                cost_data = cost_data1 / cost_data2
+            if model_norm > 0:
+                cost_data_model = cost_data1 / model_norm
+            cost_admm1 = np.linalg.norm(qx_val - admm_method.z)
+            cost_admm2 = np.linalg.norm(admm_method.z)
+            cost_admm = -1.0
+            if cost_admm2 > 0:
+                cost_admm = cost_admm1 / cost_admm2
+            print("----------------------------------------")
+            print(f"it = {_i}")
+            print("cost_data = ", cost_data)
+            print("cost_data_model = ", cost_data_model)
+            print("cost_admm = ", cost_admm)
+            print("----------------------------------------")
         x = lsmr(vstack([A, Q]), b, maxiter=nminor)
         model += x[0]
     return model
