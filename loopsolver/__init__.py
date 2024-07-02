@@ -2,7 +2,7 @@ import numpy as np
 from loopsolver.admm_method import ADMM
 from dataclasses import dataclass
 from scipy.sparse.linalg import lsmr
-from scipy.sparse import vstack
+from scipy.sparse import vstack, csr_matrix
 
 
 @dataclass
@@ -10,21 +10,32 @@ class Config:
     verbose: bool = False
 
 
-def solve(
-    A,
-    b,
-    Q,
-    bounds,
-    x0,
-    rho_ADMM,
-    nelements,
-    rmin=0,
-    nminor=100,
+def admm_solve(
+    A: csr_matrix,
+    b: np.ndarray,
+    Q: csr_matrix,
+    bounds: np.ndarray,
+    x0: np.ndarray,
+    admm_weight: float = 0.1,
     nmajor=200,
+    linsys_solver_kwargs={"maxiter": 100},
 ):
+    if A.shape[1] != x0.shape[0]:
+        raise ValueError("Number of columns in interpolation matrix does not match x0")
+    if A.shape[1] != Q.shape[1]:
+        raise ValueError(
+            "Number of columns in interpolation matrix and inequality matrix are different "
+        )
+    if Q.shape[0] != bounds.shape[0]:
+        raise ValueError("Number of rows in inequality matrix and bounds are different")
+    if bounds.shape[1] != 2:
+        raise ValueError("Bounds must have two columns")
+    if A.shape[0] != b.shape[0]:
+        raise ValueError("Number of rows in interpolation matrix and b are different")
+
     n_ie = bounds.shape[0]
     qx_val = np.zeros((Q.shape[0], 1))
-    model = np.zeros(nelements)
+    model = np.zeros(A.shape[1])
     model[:] = x0[:]
     # initialise the admm method, sets up the u and v matrices as 0s
     admm_method = ADMM(n_ie)
@@ -37,17 +48,18 @@ def solve(
     xmax = bounds[:, [1]]
     x0_ADMM = np.zeros(Q.shape[0])
     # scale the Q matrix by the admm f
-    Q *= rho_ADMM
+    Q *= admm_weight
+    matrix = vstack([A, Q])
     for _i in range(nmajor):
         # current model value
-        Mx = vstack([A, Q]) @ model  # np.dot(A, model)
+        Mx = matrix @ model  # np.dot(A, model)
 
-        qx_val[:, 0] = Mx[A_size:,] / rho_ADMM
+        qx_val[:, 0] = Mx[A_size:,] / admm_weight
         x0_ADMM = admm_method.admm_method_iterate_admm_array(xmin, xmax, qx_val)
         # print(x0_ADMM, qx_val.shape)
         # raise Exception
         b[:A_size] = b0[:A_size] - Mx[:A_size]
-        b[A_size:] = -rho_ADMM * (qx_val[:, 0] - x0_ADMM)
+        b[A_size:] = -admm_weight * (qx_val[:, 0] - x0_ADMM)
         cost_data1 = np.linalg.norm(b[:A_size])
         cost_data2 = np.linalg.norm(b0[A_size:])
         model_norm = np.linalg.norm(model)
@@ -69,6 +81,6 @@ def solve(
             print("cost_data_model = ", cost_data_model)
             print("cost_admm = ", cost_admm)
             print("----------------------------------------")
-        x = lsmr(vstack([A, Q]), b, maxiter=nminor)
+        x = lsmr(matrix, b, **linsys_solver_kwargs)
         model += x[0]
     return model
