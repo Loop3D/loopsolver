@@ -8,7 +8,6 @@ class ADMM:
         self.z = np.zeros(nelements)
         self.u = np.zeros(nelements)
         self.nelements = nelements
-        print("nel", nelements)
 
     def admm_method_iterate_admm_array(self, xmin, xmax, x):
 
