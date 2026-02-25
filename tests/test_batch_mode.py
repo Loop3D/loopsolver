@@ -1,6 +1,7 @@
 """
 Unit tests for ADMM batch mode.
 """
+
 import numpy as np
 from scipy.sparse import csr_matrix
 
@@ -15,10 +16,12 @@ def _build_problem(seed=42, n_data=30, n_vars=15, n_ineq=200):
 
     Q = csr_matrix(rng.randn(n_ineq, n_vars))
     Q_x_true = Q @ x_true
-    bounds = np.column_stack([
-        Q_x_true - 0.5,
-        Q_x_true + 0.5,
-    ])
+    bounds = np.column_stack(
+        [
+            Q_x_true - 0.5,
+            Q_x_true + 0.5,
+        ]
+    )
 
     x0 = np.zeros(n_vars)
     return A, b, Q, bounds, x0

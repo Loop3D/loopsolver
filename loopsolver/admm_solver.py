@@ -5,6 +5,7 @@ from scipy.sparse.linalg import lsmr
 from scipy.sparse import vstack, csr_matrix
 import tqdm
 
+
 @dataclass
 class Config:
     verbose: bool = False
@@ -54,15 +55,15 @@ def admm_solve(
     if A.shape[0] != b.shape[0]:
         raise ValueError("Number of rows in interpolation matrix and b are different")
     n_ie = bounds.shape[0]
-    
+
     # Setup batch mode
     use_batch_mode = False
     n_batch = n_ie
     rng = None
-    
+
     if batch_size is not None and batch_fraction is not None:
         raise ValueError("Cannot specify both batch_size and batch_fraction")
-    
+
     if batch_size is not None:
         if batch_size < 1 or batch_size > n_ie:
             raise ValueError(f"batch_size must be between 1 and {n_ie}")
@@ -73,12 +74,12 @@ def admm_solve(
             raise ValueError("batch_fraction must be between 0 and 1")
         n_batch = max(1, int(n_ie * batch_fraction))
         use_batch_mode = True
-    
+
     if use_batch_mode and random_seed is not None:
         rng = np.random.RandomState(random_seed)
     elif use_batch_mode:
         rng = np.random.RandomState()
-    
+
     qx_val = np.zeros((Q.shape[0], 1))
     model = np.zeros(A.shape[1])
     model[:] = x0[:]
@@ -96,7 +97,10 @@ def admm_solve(
     Q *= admm_weight
     matrix = vstack([A, Q])
     for k in linsys_solver_kwargs:
-        if not hasattr(linsys_solver_kwargs[k], '__len__') or len(linsys_solver_kwargs[k]) != nmajor:
+        if (
+            not hasattr(linsys_solver_kwargs[k], '__len__')
+            or len(linsys_solver_kwargs[k]) != nmajor
+        ):
             linsys_solver_kwargs[k] = [linsys_solver_kwargs[k]] * nmajor
     for _i in tqdm.tqdm(range(nmajor)):
         # Sample batch of inequality constraints if batch mode is enabled
@@ -108,7 +112,7 @@ def admm_solve(
             xmax_batch = xmax[batch_idx, :]
             matrix = vstack([A, Q_batch])
             b = np.zeros(A.shape[0] + n_batch)
-            
+
             # Create a temporary ADMM object for the batch if needed
             # This maintains z and u variables only for the sampled constraints
             admm_batch = ADMM(n_batch)
@@ -116,7 +120,7 @@ def admm_solve(
             admm_batch.u = admm_method.u[batch_idx].copy()
         else:
             batch_idx = None
-            
+
         # current model value
         Mx = matrix @ model  # np.dot(A, model)
         b[:A_size] = b0[:A_size] - Mx[:A_size]
@@ -125,9 +129,11 @@ def admm_solve(
             if use_batch_mode:
                 qx_val_batch = np.zeros((n_batch, 1))
                 qx_val_batch[:, 0] = Mx[A_size:] / admm_weight
-                x0_ADMM_batch = admm_batch.admm_method_iterate_admm_array(xmin_batch, xmax_batch, qx_val_batch)
+                x0_ADMM_batch = admm_batch.admm_method_iterate_admm_array(
+                    xmin_batch, xmax_batch, qx_val_batch
+                )
                 b[A_size:] = -admm_weight * (qx_val_batch[:, 0] - x0_ADMM_batch)
-                
+
                 # Update the main ADMM state with the batch results
                 admm_method.z[batch_idx] = admm_batch.z
                 admm_method.u[batch_idx] = admm_batch.u
@@ -168,7 +174,7 @@ def admm_solve(
                 print("cost_data_model = ", cost_data_model)
                 print("cost_admm = ", cost_admm)
                 print("----------------------------------------")
-        linsys_kwargs = {k:v[_i] for k,v in linsys_solver_kwargs.items()}
+        linsys_kwargs = {k: v[_i] for k, v in linsys_solver_kwargs.items()}
         x = lsmr(matrix, b, **linsys_kwargs)
         model += x[0]
     return model
